@@ -1,0 +1,86 @@
+<!-- Yeh code home.html ki body me jayega -->
+<div class="layout">
+    <div class="sidebar">
+        <h3>SnapPrint VIP</h3>
+        <div class="plan-card" onclick="showQR(100)">₹100 - 600 Photos</div>
+        <div class="plan-card" onclick="showQR(500)">₹500 - Unlimited</div>
+        <hr style="margin: 20px 0; border-color: #b53cff;">
+        <h4>Payment History</h4>
+        <div id="history-box"></div>
+        <button id="logout-btn" style="margin-top:auto;">Logout</button>
+    </div>
+
+    <div class="main-content">
+        <div id="upload-section" class="vip-box">
+            <h3>Upload Photo</h3>
+            <input type="file" id="user-photo" accept="image/*">
+            <input type="number" id="clone-count" placeholder="Kitne clone chahiye? (e.g. 10)">
+            <button id="process-btn">Process VIP Image</button>
+            <div class="loader" id="process-loader"></div>
+            <img id="result-img" style="width:100%; margin-top:20px; display:none; border-radius:10px;">
+            <a id="download-btn" style="display:none;" download="SnapPrint_Ready.jpg"><button>Download</button></a>
+        </div>
+
+        <!-- QR & UTR Box (Hidden by default) -->
+        <div id="payment-section" class="vip-box" style="display:none; margin-top:20px;">
+            <h3>Scan & Pay</h3>
+            <!-- Admin ka UPI lagane ka logic yaha aayega -->
+            <img src="qr_placeholder.png" alt="QR Code" width="150px"> 
+            <input type="text" id="utr-number" placeholder="Enter 12 Digit UTR Number">
+            <button onclick="submitUTR()">Submit Request</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { db, ref, push } from './firebase-config.js';
+    
+    // Image to Base64
+    const toBase64 = file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+
+    document.getElementById('process-btn').addEventListener('click', async () => {
+        const file = document.getElementById('user-photo').files[0];
+        const clones = document.getElementById('clone-count').value;
+        if(!file || !clones) return alert("Select photo and clones!");
+
+        document.getElementById('process-loader').style.display = "block";
+        const base64Image = await toBase64(file);
+
+        // Vercel Python API Call
+        const response = await fetch('/api/process', {
+            method: 'POST',
+            body: JSON.stringify({ image: base64Image, clones: clones }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        document.getElementById('process-loader').style.display = "none";
+        
+        if(data.status === "success") {
+            const resultImg = document.getElementById('result-img');
+            resultImg.src = data.result_image;
+            resultImg.style.display = "block";
+            
+            const downloadBtn = document.getElementById('download-btn');
+            downloadBtn.href = data.result_image;
+            downloadBtn.style.display = "block";
+        }
+    });
+
+    window.submitUTR = async function() {
+        const utr = document.getElementById('utr-number').value;
+        if(utr.length < 12) return alert("Valid UTR dalein");
+        // Firebase me request save karna
+        await push(ref(db, 'payment_requests'), {
+            user_uid: "USER_UID_HERE", 
+            utr: utr, 
+            status: "pending"
+        });
+        alert("Request bhej di gayi hai. Admin approve karega.");
+    }
+</script>
